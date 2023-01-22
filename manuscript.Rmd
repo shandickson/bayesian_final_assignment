@@ -1,0 +1,617 @@
+---
+title: " "
+output: 
+  pdf_document:
+    latex_engine: xelatex
+    number_sections: TRUE
+geometry: "left = 2.5cm, right = 2cm, top = 2cm, bottom = 2cm"
+fontsize: 11pt
+header-includes:
+  - \usepackage{float}
+  - \usepackage{sectsty}
+  - \usepackage{paralist}
+  - \usepackage{setspace}\spacing{1.5}
+  - \usepackage{fancyhdr}
+  - \usepackage{lastpage}
+  - \usepackage{dcolumn}
+  - \usepackage{natbib}\bibliographystyle{agsm}
+  - \usepackage[nottoc, numbib]{tocbibind}
+bibliography: bayes.bib
+csl: apa.csl
+---
+
+```{r setup, include=FALSE}
+library(tinytex)
+knitr::opts_chunk$set(
+    echo = FALSE,
+    message = FALSE,
+    warning = FALSE
+)
+options(tinytex.verbose = TRUE)
+
+# dependencies
+
+# If you don't have one of these packages installed, type "install.packages("name_of_package")" in the console; e.g.:
+# install.packages("bain")
+library(tidyverse)
+library(ggpubr)
+library(sn)
+library(kableExtra)
+
+# data
+sleep <- read.csv("data/sleephealth.csv")                        # import the data
+sleep <- sleep[,c(6,7,8,22)]                                     # keep these variables
+names(sleep) <- c("active", "duration", "onset", "screen")       # rename the columns
+sleep$interaction <- sleep$onset*sleep$screen
+sleep <- as.data.frame(scale(sleep, center = F))                 # scale/center the data 
+y  <- sleep$duration                                             # assign outcome 
+x1 <- sleep$active                                               # assign predictors
+x2 <- sleep$screen
+x3 <- sleep$interaction
+n  <- nrow(sleep)
+```
+
+```{=tex}
+\allsectionsfont{\raggedright}
+\subsectionfont{\raggedright}
+\subsubsectionfont{\raggedright}
+```
+\pagenumbering{gobble}
+````{=tex}
+\begin{centering}
+
+\vspace{3cm}
+
+```{r logo, echo=F, out.width="100%"}
+knitr::include_graphics("img/uu_logo.jpg")
+```
+
+\vspace{1cm}
+
+\Large
+{\bf Utrecht University}
+
+\Large
+{\bf Faculty of Social and Behavioural Sciences}
+
+\vspace{1cm}
+
+\Large
+
+\doublespacing
+{\bf Sleep like a Bayesian: \\ Do healthy lifestyle habits promote sleep?}
+
+\vspace{1 cm}
+
+\normalsize
+\singlespacing
+By
+
+\vspace{0.5 cm}
+
+\Large
+
+{\bf Shannon Dickson,}
+
+\vspace{1.5 cm}
+
+\Large
+{\bf Methodology and Statistics for the Behavioural, Biomedical,\\and Social Sciences}
+
+\vspace{1.5 cm}
+
+\normalsize
+
+Bayesian Statistics: Final Assignment
+
+Submitted: June 2022
+
+\end{centering}
+````
+
+\newpage
+
+\pagenumbering{gobble}
+
+\spacing{1.5}
+
+# Introduction
+
+Despite a great consensus that sufficient sleep is important for our general health, many adults do not engage in behaviours that promote it. According to the National Sleep Foundation, adults need between 7 - 9 hours of sleep to function well. How realistic is this? A 2017 National Health Survey reported that 1 in 5 people in the Netherlands have problems getting to sleep and staying asleep and 41% of these individuals reported poor daily functioning. Furthermore, a study at Leiden University found that more than a third of students at Dutch Universities do not get the recommended hours of sleep and that this negatively impacts their grades. This raises an important question: what kind of healthy lifestyle behaviours promote better (longer) sleep? I will focus on two possibilities: daily exercise and evening screen time. Exercise is known to regulate our circadian rhythm in a way that improves sleep. Screen time has the opposite effect on sleep, due to blue light exposure that promotes alertness. I aim to use a Bayesian linear regression analysis to assess the impact of daily exercise and evening screen time on the duration of sleep in adult. Although I expect both factors to be influential for sleep duration, I have a small suspicion that screen time will have a larger effect than exercise. My suspicion is entirely based on my own sleep-deprived status, despite excessive exercise, which is probably due to my habit of doom-scrolling Twitter in the hour before bed.
+
+# Descriptive Statistics
+
+Data is acquired from the Sleep Quality and Behavioural Health dataset which has been shared on Kaggle [@sleepdatv1; @aroraSleepQualHealthSmartwatch2022; @aroraInterventionWearablesSmartphones2022], which contains information about the sleep quality and behavioural health of 24 university students collected using smartphones and wearable technology. Only the following variables are used in the analysis: duration (daily sleep in minutes), active (daily exercise minutes), screen (evening screen time minutes), and onset (sleep latency in minutes). Sleep duration ranged from 94 - 866 minutes (mean = 413, SD = 128). Daily exercise ranged from 10 - 216 minutes (Mean = 70, SD = 45). Screen time ranged from 23 = 963 minutes (mean = 279, SD = 202). Sleep latency ranged from 0 - 69 minutes (Mean = 16, SD = 13). An interaction variable was created between screen time and sleep latency, as it is expected that greater screen time will lead to longer sleep latency, consequently reducing the time spent asleep. 
+
+\newpage
+
+# Hypotheses 
+
+I have the following beliefs about the relationships in the data:
+
+$H_2$: Sleep duration is greatly affected by daily exercise and evening screen time. 
+
+$H_2$: Screen time will have a larger affect on sleep duration than daily exercise and latency.
+
+$H_3$: An interaction between screen time and sleep latency will have a larger effect on sleep duration than daily exercise and screen time alone. 
+
+# Methods
+
+## Models
+
+To assess $H_1$ and $H_2$ I will obtain the following model:
+
+**Model 1:** $Sleep_i = \beta_0 + \beta_1*Exercise_i+ \beta_2 * Screentime_i + \beta_3 * Latency + \epsilon_i$
+
+To assess $H_3$ I will obtain the following model:
+
+**Model 1:** $Sleep_i = \beta_0 + \beta_1*Exercise_i+ \beta_2 * Screentime_i + \beta_3 * Interaction_i + \epsilon_i$
+
+## Markov Chain Monte Carlo: Sampling by the Gibbs and Metropolis-Hastings Algorithms
+
+I will use two MCMC sampling methods to obtain the coefficients for different parameters. MCMC is a class of methods whereby we use simulated draws from an approximate posterior distribution and use these draws to calculate quantities of interest for the posterior distribution, such as the mean, standard deviation credible intervals, and MC error. The Metropolis-Hastings algorithm works by sampling from a proposal distribution, with each sampled value accepted givena a certain probability, known as the acceptance ratio. This ratio represents the probability that the proposed sampled value is greater than a value sampled from a uniform distribution. The Gibbs algorithm is a special case of Metropolis-Hastings, where the proposed value is always accepted. The Gibbs algorithm samples iteratively from the joint conditional posterior distribution of a certain parameter, given all other parameters. As such, we use Gibbs sampling when we know the full conditional posterior distribution and otherwise we use Metropolis-Hastings.
+
+In this study, Gibbs sampling is used for $\beta_0$, $\beta_1$, $\beta_3$, and $\sigma^2)$ and Metropolis-Hastings sampling is used for $\beta_2$. Slightly informative priors are specified $\beta_0 \sim N(0, 0.25)$ and $\beta_{1...3} \sim N(0, 0.5)$. The residual error variance is $\tau \propto \frac {1} {s^2} \sim IG(0.001, 0.001)$. Starting values are chosen arbitrarily for the parameters and ideally do not (heavily) influence the coefficients. The sampling procedure is performed twice, forming two chains with different starting values. I assess convergence of each chain and the pooled chains is by a visual inspection of trace plots, autocorrelation plots, and by comparing the resulting parameter estimates including the Monte Carlo Error.
+
+## Posterior Predictive Checks
+
+Posterior predictive checks are used to evaluate the assumptions of the regression model, by means of outliers, skewness, and a crude measure of homoscedasticity (correlation of residuals and fitted values). These test-statistics and discrepancy measure of the observed data is compared to that of many simulated datasets. Outliers are assessed by computing the difference between the largest and smallest values. P-values around 0.5 are ideal, with extreme values indicating a smaller or wider spread in the simulated data versus observed. Skewness is also computed as an assessment of multivariate normality, and similarly compared in the simulated vs observed datasets. Lastly, a crude, graphical posterior predictive check is conducted by comparing the fitted values vs residuals in the simulated and observed datasets (see Supplementary A). 
+
+## Model comparison
+
+I will compare the different models by means of the Deviance Information Criterion (DIC). The DIC is a Bayesian method for model comparison that considers the fit and complexity of a model, formulated as ${DIC} =D({\bar {\theta }})+2p_{D}$, with lower DICs preferred. 
+
+## Bayes Factor
+
+The model parameters are compared using the Bayes Factor, according to $H_1$, $H_2$, and $H_3$ specified previously. Each hypothesis will be compared to its complement, such that Bayes Factors are a measure of support for $H_1: \beta_1= 0, \beta_2 = 0, \beta_3 = 0; H_c: \beta_1, \beta_2, \beta_3$, $H_2: \beta_2 > \beta_1; H_C: \beta_1, \beta_2$, and $H_3: \beta_3 > \beta_2 \& \beta_3 > \beta_1; H_C: \beta_1, \beta_2, \beta_3$. 
+
+\newpage
+
+# Results
+
+```{r priors, include = FALSE}
+# Specify weakly informative priors for betas
+mu.00 = 0           
+sigma2.00 = 0.25 
+
+mu.10 = 0           
+sigma2.10 = 0.5
+
+mu.20 = 0         
+sigma2.20 = 0.5
+
+mu.30 = 0           
+sigma2.30 = 0.5
+# Specify inverse gamma prior for variance
+A.0 = 0.00001           
+B.0 = 0.00001 
+```
+
+```{r initial values, include = FALSE}
+# initial values
+beta0 = 0
+beta1 = 0.07
+beta2 = 0.06
+beta3 = 0.05
+sigma2 = 0.5
+step = 0.0005
+
+burnIN <- 30000
+thin <- 1000
+nITER <- burnIN + thin
+```
+
+```{r sampler, include = FALSE}
+# Define function
+Gibbs_MH_Sampler <- function(y, x1, x2 = NULL, x3 = NULL, n, mu.00, sigma2.00, mu.10, sigma2.10, mu.30, sigma2.30, A.0, B.0){
+  
+# Iterations
+  
+# - Storage for the estimates
+  beta0s <- c()
+  beta1s <- c()
+  beta2s <- c()
+  beta3s <- c()
+  sigma2s<- c()
+  js<- c()
+  
+# - Start sampling
+  for (chain in 1:2){
+    j <- 0 
+# - Iterate over parameters
+    for(iter in 1:nITER){
+      j <- j+1 
+      # - Sample beta0
+      beta0 <- rnorm(1, mean = ((sum(y - beta1*x1 -beta2*x2 - beta3*x3)/sigma2) + mu.00/sigma2.00) / (n/sigma2 + 1/sigma2.00), sd = sqrt(1/(n/sigma2 + 1/sigma2.00)))
+      
+      # - Sample beta1
+      beta1 <- rnorm(1, mean = ((sum(x1*(y - beta0 - beta2*x2 - beta3*x3))/sigma2) + mu.10/sigma2.10) / (sum(x1^2)/sigma2 + 1/sigma2.10), sd = sqrt(1/(n/sigma2 + 1/sigma2.00)))
+      
+      # - Sample beta2 
+        # - skew-normal distribution
+      prop  <- rsn(xi=1.256269, omega=1.605681, alpha=5) 
+      ref  <- runif(1)     
+      poa <- exp((dt(prop, df=2, log = T))) / exp((dt(beta2, df=2, log = T))) * (dnorm(beta2, mean = beta2, sd= step) / dnorm(prop, mean=beta2, sd=step))
+      accept  <- ifelse(poa >= ref, 1, 0)                                         
+      if (accept == 1){
+        beta2 <- prop}
+      
+      # - Sample beta_3
+      beta3 <- rnorm(1, mean = ((sum(x3*(y - beta0 - beta2*x2 - beta1*x1))/sigma2) + mu.30/sigma2.30) / (sum(x3^2)/sigma2 + 1/sigma2.30), sd = 1/ (sum(x3^2)/sigma2 + 1/sigma2.30))
+      
+      # - Sample sigma^2 
+      yhat <-  beta0 + beta1*x1 + beta2*x2 + beta3*x3
+      A <- A.0 + n/2
+      B <- sum((y-yhat)^2) /2 + B.0
+      sigma2   <-  1 /rgamma(1, A, B)
+      
+# - Storage vector for estimates
+   beta0s[iter]  <- beta0 
+   beta1s[iter]  <- beta1
+   beta2s[iter]  <- beta2
+   beta3s[iter]  <- beta3
+   sigma2s[iter]  <- sigma2
+   js[iter] <- j
+    }
+    
+# - Store the results for each chain
+  if(chain == 1){                                                                 
+  dat <- cbind(beta0s, beta1s, beta2s, beta3s, sigma2s, chain, js)
+  chain1 <- as.data.frame(dat[(burnIN+1):nITER,])}
+  else{dat <- cbind(beta0s, beta1s, beta2s, beta3s, sigma2s, chain, js)
+  chain2 <- as.data.frame(dat[(burnIN+1):nITER,])
+  pooled_chains <- rbind(chain1, chain2)}                                          
+  }
+  
+# Sample statistics for each chain
+# - CHAIN 1 
+chain1_sample <- as.data.frame(matrix(0, 5, 5))                                                  
+rownames(chain1_sample)<- c("Intercept", "beta1", "beta2", "beta3", "sigma")
+colnames(chain1_sample)<- c("Mean", "SD", "CI 2.5%", "CI 97.5", "MC Error")
+chain1b <- chain1 %>% select(-js, -chain)
+chain1_sample[,1]<- apply(chain1b, 2, mean)
+chain1_sample[,2]<- apply(chain1b, 2, sd)
+chain1_sample[,3]<- apply(chain1b, 2, quantile, 0.025)
+chain1_sample[,4]<- apply(chain1b, 2, quantile, 0.975)
+sds <- chain1_sample[,2]
+chain1_sample[,5]<- sds[1:5]/sqrt(nITER)
+
+# - CHAIN 3
+chain2_sample <- as.data.frame(matrix(0, 5, 5))                                              
+rownames(chain2_sample)<- c("Intercept", "beta1", "beta2", "beta3", "sigma")
+colnames(chain2_sample)<- c("Mean", "SD", "CI 2.5%", "CI 97.5", "MC Error")
+chain2b <- chain2 %>% select(-js, -chain)
+chain2_sample[,1]<- apply(chain2b, 2, mean)
+chain2_sample[,2]<- apply(chain2b, 2, sd)
+chain2_sample[,3]<- apply(chain2b, 2, quantile, 0.025)
+chain2_sample[,4]<- apply(chain2b, 2, quantile, 0.975)
+sds <- chain2_sample[,2]
+chain2_sample[,5]<- sds[1:5]/sqrt(nITER)
+
+# - POOLED CHAINS
+pooled_sample <- as.data.frame(matrix(0, 5, 5))                                   
+rownames(pooled_sample)<- c("beta0", "beta1", "beta2", "beta3", "sigma")
+colnames(pooled_sample)<- c("Mean", "SD", "CI 2.5%", "CI 97.5", "MC Error")
+pooled_chainsb <- pooled_chains %>% select(-js,-chain) 
+pooled_sample[,1]<- apply(pooled_chainsb, 2, mean)
+pooled_sample[,2]<- apply(pooled_chainsb, 2, sd)
+pooled_sample[,3]<- apply(pooled_chainsb, 2, quantile, 0.025)
+pooled_sample[,4]<- apply(pooled_chainsb, 2, quantile, 0.975)
+sds <- pooled_sample[,2]
+pooled_sample[,5]<- sds[1:5]/sqrt(nITER)
+
+# DIC Calculation
+
+two_ll <- rep(NA, nrow(pooled_sample))
+for(i in 1:nrow(pooled_sample)){
+  two_ll[i] <- -2*sum(dnorm(y, mean = pooled_chains[i,2] + pooled_chains[i,3]*x1 + pooled_chains[i,4]*x2 + pooled_chains[i,5]*x3, sd =sqrt(pooled_chains[i,6]),log=T))}
+d_bar = mean(two_ll)
+d_hat = 2*sum(dnorm(y, mean = pooled_sample$Mean[1] + pooled_sample$Mean[2]*x1 + pooled_sample$Mean[3]*x2 + pooled_sample$Mean[4]*x3, sd = sqrt(pooled_sample$Mean[5]), log=T))
+      
+DIC <- d_hat + 2*(d_bar-d_hat)
+
+# Return output
+my_list1 <- list("chain1"=chain1,
+                 "chain1_sample"=chain1_sample,
+                 "chain2"=chain2, "chain2_sample"=chain2_sample,
+                 "pooled_chains"=pooled_chains,
+                 "pooled_sample"=pooled_sample,
+                 "DIC"=DIC,
+                 "nITER"=nITER,
+                 "thin"=thin,
+                 "burnIN"=burnIN) 
+
+# - to the environment only 
+list2env(my_list1 ,.GlobalEnv) 
+
+# - explicitly output
+my_list2 <- list(chain1_sample, chain2_sample, pooled_sample) 
+return(my_list2)
+}
+
+# END
+```
+
+```{r models, include=F}
+mod_1 <- Gibbs_MH_Sampler(y=sleep$duration,
+                          x1=sleep$active,
+                          x2=sleep$screen,
+                          x3=sleep$interaction,
+                          n=168,
+                          mu.00=0,
+                          sigma2.00=0.25,
+                          mu.10=0,
+                          sigma2.10=0.5,
+                          mu.30=0,
+                          sigma2.30=0.5,
+                          A.0=0.00001,
+                          B.0=0.00001)
+```
+
+## Convergence
+
+**Figure 1** presents the trace plots per chain of each sampled parameter, once the burn-in period has been discarded. The two chains had different starting values, but the range of the chains appears similar to one another indicating they are sampling similar values. However, there appears to be a lot of variability in the samples, which can sometimes indicate autocorrelation, but at least the chains vary similarly. I am comfortable concluding that the convergence according to these trace plots is acceptable and 31,000 iterations should be sufficient.
+
+\
+
+```{r, echo=F, fig.height=6, fig.width=10}
+# Trace plots
+plot_data <- gather(pooled_chains,
+                    key="measure",
+                    value="value",
+                    c("beta0s", "beta1s", "beta2s", "beta3s", "sigma2s"))
+
+ggplot(plot_data, aes(x = js, y =value)) + 
+  geom_line(aes(color = as.factor(chain))) + 
+  scale_color_manual(values = c("orange", "seagreen4"),
+                     name="Chain") +
+  labs(title = "Figure 1. Trace plots") +
+  xlab("") +
+  facet_wrap(~measure, scales ="free_y") +
+  theme_bw()
+```
+
+\newpage
+
+**Figure 2**. presents a nice overview of the autocorrelation for each parameter (pooled across chains). By visually inspecting these plots autocorrelation does not seem to be a problem, at most for $\beta_1$. Given the variability seen in the trace plots I am somewhat surprised that autocorrelation appears so low, at least visually. However, this is good news for $\beta_2$ which is sampled with a Metropolis-Hastings step. I am happy with the autocorrelation of this parameter, given the very small tuning step.
+
+\
+
+```{r autocorrelation, include=F}
+# Function for autocorrelation
+acfPlot = function(param, s, plot, title){
+  rho<-matrix(0,1) 
+  for(i in 0:s){
+    rho[i+1] = cor(c(param[1:(1000-i)]), c(param[(i+1):1000]))}
+  if(plot){
+    df = data.frame(ACF = rho, Lag=0:s)
+    graph = ggplot(df, aes(x = Lag, y= ACF)) + 
+              geom_bar(width = 0.3,
+                       stat = "identity",
+                       position = "identity",
+                       fill = "seagreen4") + 
+              geom_point(color = "orange")+
+              labs(title = title) +
+              theme_bw()
+    plot(graph)}}
+  
+p6 <- acfPlot(param = pooled_chains$beta0s,  s = 50, plot = T, title = "beta0")
+p7 <- acfPlot(param = pooled_chains$beta1s,  s = 50, plot = T, title = "beta1")
+p8 <- acfPlot(param = pooled_chains$beta2s,  s = 50, plot = T, title = "beta2")
+p9 <- acfPlot(param = pooled_chains$beta3s,  s = 50, plot = T, title = "beta3")
+p10 <- acfPlot(param = pooled_chains$sigma2s, s = 50, plot = T, title = "sigma2")
+```
+
+```{r,echo=F,fig.width=10,fig.height=6}
+# Arrange autocorrelations into one plot
+acfs<-ggarrange(p6,p7,p8,p9,p10, ncol=2, nrow=3)
+annotate_figure(acfs,
+                top = text_grob("Figure 2. Autocorrelation plots",
+                                face = "bold",
+                                size = 12))
+```
+
+\newpage
+
+Posterior densities for the two chains are shown in **Figure 3**. Although the posterior densities show that the two chains overlap reasonably well, despite the different starting values, they are not normally distributed. The posterior density for sigma is extremely right skewed and chain 2 exhibits more extreme values in the tails. From this, I expect the model assumptions to be violated, namely outliers and skewness. 
+
+```{r posterior density, include=F, warning=F, echo=F, message=F}
+# Density Plots
+# - BETA 0
+p1<-ggplot(pooled_chains, aes(x=beta0s)) +                                          
+    geom_histogram(fill = "white", aes(color = as.factor(chain))) + 
+      geom_vline(aes(xintercept=mean(beta0s)), color="black", linetype="dashed") +
+      scale_color_brewer(palette = "Dark2") +
+      ylab("") + xlab("b0") +
+      labs(col="Chain") +
+      theme_bw()
+# - BETA 1
+p2<-ggplot(pooled_chains, aes(x=beta1s)) +                                          
+    geom_histogram(fill = "white", aes(color = as.factor(chain))) + 
+      geom_vline(aes(xintercept=mean(beta1s)), color="black", linetype="dashed") +
+      scale_color_brewer(palette = "Dark2") +
+      ylab("") + xlab("b1") +
+      labs(col="Chain") +
+      theme_bw()
+# - BETA 2
+p3<-ggplot(pooled_chains, aes(x=beta2s)) +                                          
+    geom_histogram(fill = "white", aes(color = as.factor(chain))) + 
+      geom_vline(aes(xintercept=mean(beta2s)), color="black", linetype="dashed") +
+      scale_color_brewer(palette = "Dark2") +
+      ylab("") + xlab("b2") +
+      labs(col="Chain") +
+      theme_bw()
+# - BETA 3
+p4<-ggplot(pooled_chains, aes(x=beta3s)) +                                          
+    geom_histogram(fill = "white", aes(color = as.factor(chain))) + 
+      geom_vline(aes(xintercept=mean(beta3s)), color="black", linetype="dashed") +
+      scale_color_brewer(palette = "Dark2") +
+      labs(col="Chain") +
+      ylab("") + xlab("b3") +
+      theme_bw()
+# - SIGMA^2
+p5<-ggplot(pooled_chains, aes(x=sigma2s)) +                                          
+    geom_histogram(fill = "white", aes(color = as.factor(chain))) + 
+      geom_vline(aes(xintercept=mean(sigma2s)), color="black", linetype="dashed") +
+      scale_color_brewer(palette = "Dark2") +
+      labs(col="Chain") +
+      ylab("") + xlab("s2") +
+      theme_bw()
+```
+
+```{r, echo=F,fig.width=10,fig.height=6, warning=F, message=F}
+dens <- ggarrange(p1,p2,p3,p4,p5,
+                  ncol=2,
+                  nrow=3,
+                  legend="bottom",
+                  common.legend = T)
+annotate_figure(dens,
+                top = text_grob("Figure 3. Posterior densities", face = "bold", size = 12))
+```
+
+\newpage
+
+## Sample Statistics
+
+**Table 1** displays the sample statistics for the pooled chains for each parameter, including the the (posterior) mean, standard deviation, 2.5% and 97.5% credible confidence intervals, and the MC error. The sample statistics for sigma seem rather large, but the MC error is still much smaller. In fact, the MC errors for all parameter estimates are much smaller than the standard deviations. Overall, I conclude that the sampler has converged. 
+
+```{r sample statistics, echo=F, fig.height=4, fig.width=5}
+pooled_sample %>% 
+knitr::kable(
+    caption = "Pooled sample statistics for the posterior distributions of the parameters",
+    format = "latex",
+    align = "l",
+    digits = 6,
+    booktabs = TRUE) %>% 
+  kableExtra::kable_styling(
+      position = "center",
+      latex_options = c("striped", "HOLD_position"),
+      stripe_color = "gray!15"
+    )
+```
+
+The posterior predictive p-value (PPV) for the assumption of the absence of outliers is 0.001, which is very different from the ideal 0.5, and indicates that outliers are present in our data. The PPV for skewness is 1, again, indicating that the data is highly skewed. Lastly, the PPV for the crude measure of homoscedasticity is 0.626, meaning there is some heterskedasticity present. However, the graphical check of the homoscedasticity appears not too extreme. 
+
+```{r ppc, include=F}
+# Posterior predictive check
+simdata <- matrix(0,nrow=nrow(pooled_chains),ncol=3)   # storage for simulated data
+obsdata <- matrix(0,nrow=nrow(pooled_chains), ncol=3)  # storage for observed data
+vars <- cbind(rep(1,n), x1,x2,x3)                      # observed data matrix 
+
+# Predicted data, test-statistic (outliers), discrepancy measure (skew)
+for (i in 1:nrow(pooled_chains)){
+  betas<- as.numeric(pooled_chains[i, 2:5])           # pooled betas
+  sd<- sqrt(pooled_chains[i,6])                       # pooled standard deviation
+  R_est<- vars%*%betas                                # predicted y (sleep minutes)
+  R_fit<- R_est + rnorm(n,0,sd)                       # dependent variable
+  simres<- R_fit - R_est                              # residual errors
+  simdata[i,1]<- max(R_est)-min(R_est)                # Outliers (range)
+  simdata[i,2]<- (sum((simres-mean(simres))^3)/n)/(sum((simres-mean(simres))^2)/n)^(3/2)      # Skew
+  simdata[i,3]<- cor(simres, R_fit)                                                           # crude measure of homoscedasticity
+}
+
+# Predicted data, test-statistic (outliers), discrepancy measure (skew)
+for (i in 1:nrow(pooled_chains)){
+  betas<- as.numeric(pooled_chains[i, 2:5])     
+  sd<- sqrt(pooled_chains[i,6])
+  R_est<- vars%*%betas
+  R_obs<- y
+  obsres <- R_obs - R_est
+  obsdata[i,1]<- max(R_obs)-min(R_obs)
+  obsdata[i,2]<- (sum((obsres-mean(obsres))^3)/n)/(sum((obsres-mean(obsres))^2)/n)^(3/2)
+  obsdata[i,3]<- cor(obsres, R_obs)                                                           # crude measure of homoscedasticity
+}
+
+# Posterior predictive p-value: outliers
+pvals_outliers <- matrix(nrow=nrow(pooled_chains), ncol=1)
+for(i in 1:nrow(pooled_chains)){
+  pvals_outliers[i]<- ifelse(simdata[i,1] < obsdata[i,1], 1, 0)
+}
+mean(pvals_outliers)
+
+# Posterior predictive p-value: skewness
+pvals_skew <- matrix(nrow=nrow(pooled_chains), ncol=1)
+for(i in 1:nrow(pooled_chains)){
+  pvals_skew[i]<- ifelse(simdata[i,2] > obsdata[i,2], 1, 0)
+}
+mean(pvals_skew)
+
+# Posterior predictive crude pvalue: homoscedasticity
+pvals_cor <- matrix(nrow=nrow(pooled_chains), ncol=1)
+for(i in 1:nrow(pooled_chains)){
+  pvals_cor[i]<- ifelse(simdata[i,3] > obsdata[i,3], 1, 0)
+}
+mean(pvals_cor)
+```
+
+
+## Bayes Factor and DIC
+
+The Bayes Factor for $H_1: \beta_1= 0, \beta_2 = 0, \beta_3 = 0; H_c: \beta_1, \beta_2, \beta_3$ is 0.00, meaning there is a very large amount of support for the hypothesis that all three coefficients are greater than zero. Therefore, we can conclude than the hypothesised model fits the data and that sleep is affected by exercise, screen time, and sleep latency. The Bayes Factor for $H_2: \beta_2 > \beta_1; H_C: \beta_1, \beta_2$ is also 0.00, again indicating that there is more support than exercise has a larger effect on sleep than exercise. Finally, the Bayes Factor for $H_3: \beta_3 > \beta_2 \& \beta_3 > \beta_1; H_C: \beta_1, \beta_2, \beta_3$ is 166.59, also supporting the hypothesis that the interaction between screen time and sleep latency has a greater effect on sleep than exercise and screen time alone. 
+
+The DIC for model 1 is 7444 and for model 2 is 7857.
+
+```{r bayes factor, include=F}
+library(bain)
+# Hypothesis 1
+set.seed(13)
+m1<-lm(duration~active+screen+interaction, data=sleep)
+BF_1 <- bain(m1, hypothesis = "active = 0 & screen = 0 & interaction = 0", standardize = T)
+print(BF_1, ci = 0.95)
+# Hypothesis 2
+set.seed(13)
+m2<-lm(duration~active+screen, data=sleep)
+BF_2 <- bain(m2, hypothesis = "screen > active", standardize = T)
+print(BF_2, ci = 0.95)
+# Hypothesis 3
+set.seed(13)
+m3<-lm(duration~active+screen+interaction, data=sleep)
+BF_3 <- bain(m3, hypothesis = "interaction > screen & interaction > active", standardize = T)
+print(BF_3, ci = 0.95)
+```
+```{r, include=F}
+mod_2 <- Gibbs_MH_Sampler(y=sleep$duration,x1=sleep$active,x2=sleep$screen,x3=sleep$onset,n=168,mu.00=0,sigma2.00=0.25,mu.10=0,sigma2.10=0.5,mu.30=0,sigma2.30=0.5,A.0=0.00001,B.0=0.00001)
+```
+
+# Discussion and Interpretation
+
+Using a Bayesian regression analysis that combines Gibbs and Metropolis-Hastings algorithms, I was able to model the effect of daily exercise, screen time, and an interaction between screen time and sleep latency, on sleep duration. Furthermore, I computed a DIC for two models, and Bayes Factors for each of my three hypotheses. The Bayes Factors for $H_1$ corroborated my hypothesised beliefs that these factors *do* affect sleep duration. Additionally, they indicate consistent with $H_3$ that the interaction term has the largest effect on sleep, followed by exercise and then screen time, the latter being inconsistent with $H_2$. The DIC was lowest for the model including the interaction term, which also matches my hypotheses.
+
+The positive regression coefficients for screen time is not entirely as expected. I predicted that increased screen time would reduce sleep duration, and I stand corrected. It is interesting to think about possible confounders, for instance, more screen time at night could mean a later bedtime and a much longer sleep-in than usual to compensate. This is, however, speculation. As expected, increased exercise lead to increased sleep duration, and the interaction term lead to reduced sleep duration.
+
+The regression assumptions tested by means of a PPV highlighted some model violations. Outliers, skewness, and slight homoscedasticity are present in the data. I tried to circumvent this issue in two ways: Firstly, I implemented a skew-normal proposal distribution within the MH-sampler. This did help the sampler converge more appropriately. Secondly, I computed the log-conditional posterior t-distribution within the MH step to account for the skewed data in particular. Although not included here, without these two approaches the sampler would not come close to convergence. However, the assumptions remain violated. Future studies could focus on a sensitivity analyses, to inspect the influence of different kinds of priors. 
+
+## Frequentist or Bayesian: is that the question?
+
+I only consider a Bayesian approach to this analyses, for the following reasons. Bayes Factors are very desirable, as they allow more flexible testing of several different hypotheses in a way that classic hypothesis testing cannot. This means we can see what is the *most* important predictor of sleep, satisfying our search for meaning. I also prefer the interpretaton of credible intervals over confidence intervals. Credible intervals form a distribution that gives a nice indication of the actual chances that our coefficient is zero. This is the case for exercise for instance, and we can assume it would not be significant in a classical setting, giving the best of both worlds. Lastly, I was able to incorporate prior information into my analyses like the true scientist I claim to be. Priors are also useful for regulating non-normal data. Although the priors are only weakly informative, they do help the sampler converge and we can use this information going forward (e.g. in a sensitivity analysis). 
+
+\newpage
+
+# References
+
+<div id="refs"></div>
+
+\newpage
+
+# Supplementary A
+
+```{r, echo=F}
+# Graphical posterior predictive check
+plot(obsres, R_obs, main = "Figure A1: Observed Data", xlab = "Observed Residuals", ylab = "Predicted", pch = 20, col = "darkseagreen")
+```
+
+```{r}
+plot(simres, R_obs, main = "Figure A2: Simulated Data", xlab = "Observed Residuals", ylab = "Predicted", pch = 20, col = "darkseagreen")
+```
+
+
+
+t
+
+
+
+
+
+
+
+
