@@ -26,11 +26,11 @@ Below is a summary of the content in this repository:
                      
 - bayes.bib                      : bibliography for manuscript
 
-- apa.cls                        : APA 7th Edition cls file to format bibliography
+- apa.cls                        : APA 7th Edition cls file to format bibliography.
                                    I downloaded it from https://github.com/citation-style-language/styles/blob/b111f31efe5ecfc2dd01ebdea1373b57abaf0b0b/apa.csl
                      
 - data                           : this folder contains one file: "sleephealth.csv" on which the Bayesian analysis is performed.
-                                   the original data can be downloaded at https://www.kaggle.com/datasets/anshika1011/sleepqual-and-bhealth-dataset
+                                   The original data can be downloaded at https://www.kaggle.com/datasets/anshika1011/sleepqual-and-bhealth-dataset
 
 - img                            : this folder contains the Utrecht University logo used on the title page
 
