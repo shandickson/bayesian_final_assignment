@@ -10,6 +10,8 @@ In order to keep the flow of the manuscript consistent, please do not change the
 If you are only interested in the code that produces the results, and wish to skip my ramblings, please see the "bayes_assignment_only_code.R".
 Otherwise, read through the report from start to finish, and try not to be too judgemental of my Bayesian skills.
 
+All analysis is conducted using R version 4.1.2. So you need to have R and R Studio installed. 
+
 *Note: This repository doubles as my submission to the "Markup Languages 2022" course final deliverables.*
 
 ### Content Summary
